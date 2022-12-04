@@ -2,15 +2,15 @@
 seeds = false
 skip-lint = false
 [programs.localnet]
-owner_check = "HQYNznB3XTqxzuEqqKMAD9XkYE5BGrnv8xmkoDNcqHYB"
-clone = "DUN7nniuatsMC7ReCh5eJRQExnutppN1tAfjfXFmGDq3"
+owner_check = "9o4A8QckkUyxgTxsCRxHxji7FqBSuWHRtQcaXRZGrZp9"
+clone = "DJSGTQPYWj9kZqBrD993LJy2fM7R3zsxL8KrAtRMbUi5"
 
 [registry]
 url = "https://api.apr.dev"
 
 [provider]
 cluster = "localnet"
-wallet = "/home/johnliu/.config/solana/id.json"
+wallet = "~/.config/solana/id.json"
 
 [scripts]
 test = "yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/**/*.ts"

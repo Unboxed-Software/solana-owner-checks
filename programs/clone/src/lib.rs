@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 use anchor_spl::token::TokenAccount;
 
-declare_id!("DUN7nniuatsMC7ReCh5eJRQExnutppN1tAfjfXFmGDq3");
+declare_id!("DJSGTQPYWj9kZqBrD993LJy2fM7R3zsxL8KrAtRMbUi5");
 
 #[program]
 pub mod clone {

@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 use anchor_spl::token::{self, Mint, Token, TokenAccount};
 
-declare_id!("HQYNznB3XTqxzuEqqKMAD9XkYE5BGrnv8xmkoDNcqHYB");
+declare_id!("9o4A8QckkUyxgTxsCRxHxji7FqBSuWHRtQcaXRZGrZp9");
 
 #[program]
 pub mod owner_check {
