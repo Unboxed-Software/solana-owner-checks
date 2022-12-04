@@ -101,4 +101,64 @@ describe("owner-check", () => {
       vaultClone,
     ])
   })
+
+  it("Insecure withdraw", async () => {
+    const tx = await program.methods
+      .insecureWithdraw()
+      .accounts({
+        vault: vaultClone.publicKey,
+        tokenAccount: tokenPDA,
+        withdrawDestination: withdrawDestinationFake,
+        authority: walletFake.publicKey,
+      })
+      .transaction()
+
+    await anchor.web3.sendAndConfirmTransaction(connection, tx, [walletFake])
+
+    const balance = await connection.getTokenAccountBalance(tokenPDA)
+    expect(balance.value.uiAmount).to.eq(0)
+  })
+
+  it("Secure withdraw, expect error", async () => {
+    try {
+      const tx = await program.methods
+        .secureWithdraw()
+        .accounts({
+          vault: vaultClone.publicKey,
+          tokenAccount: tokenPDA,
+          withdrawDestination: withdrawDestinationFake,
+          authority: walletFake.publicKey,
+        })
+        .transaction()
+
+      await anchor.web3.sendAndConfirmTransaction(connection, tx, [walletFake])
+    } catch (err) {
+      expect(err)
+      console.log(err)
+    }
+  })
+
+  it("Secure withdraw", async () => {
+    await spl.mintTo(
+      connection,
+      wallet.payer,
+      mint,
+      tokenPDA,
+      wallet.payer,
+      100
+    )
+
+    await program.methods
+      .secureWithdraw()
+      .accounts({
+        vault: vault.publicKey,
+        tokenAccount: tokenPDA,
+        withdrawDestination: withdrawDestination,
+        authority: wallet.publicKey,
+      })
+      .rpc()
+
+    const balance = await connection.getTokenAccountBalance(tokenPDA)
+    expect(balance.value.uiAmount).to.eq(0)
+  })
 })

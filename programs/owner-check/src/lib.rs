@@ -43,6 +43,29 @@ pub mod owner_check {
         token::transfer(cpi_ctx, amount)?;
         Ok(())
     }
+
+    pub fn secure_withdraw(ctx: Context<SecureWithdraw>) -> Result<()> {
+        let amount = ctx.accounts.token_account.amount;
+
+        let seeds = &[
+            b"token".as_ref(),
+            &[*ctx.bumps.get("token_account").unwrap()],
+        ];
+        let signer = [&seeds[..]];
+
+        let cpi_ctx = CpiContext::new_with_signer(
+            ctx.accounts.token_program.to_account_info(),
+            token::Transfer {
+                from: ctx.accounts.token_account.to_account_info(),
+                authority: ctx.accounts.token_account.to_account_info(),
+                to: ctx.accounts.withdraw_destination.to_account_info(),
+            },
+            &signer,
+        );
+
+        token::transfer(cpi_ctx, amount)?;
+        Ok(())
+    }
 }
 
 #[derive(Accounts)]
@@ -74,6 +97,25 @@ pub struct InitializeVault<'info> {
 pub struct InsecureWithdraw<'info> {
     /// CHECK:
     pub vault: UncheckedAccount<'info>,
+    #[account(
+        mut,
+        seeds = [b"token"],
+        bump,
+    )]
+    pub token_account: Account<'info, TokenAccount>,
+    #[account(mut)]
+    pub withdraw_destination: Account<'info, TokenAccount>,
+    pub token_program: Program<'info, Token>,
+    pub authority: Signer<'info>,
+}
+
+#[derive(Accounts)]
+pub struct SecureWithdraw<'info> {
+    #[account(
+       has_one = token_account,
+       has_one = authority
+    )]
+    pub vault: Account<'info, Vault>,
     #[account(
         mut,
         seeds = [b"token"],
