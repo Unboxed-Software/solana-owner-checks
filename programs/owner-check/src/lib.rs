@@ -1,9 +1,7 @@
 use anchor_lang::prelude::*;
 use anchor_spl::token::{self, Mint, Token, TokenAccount};
 
-declare_id!("2JzQxdnKh6RXwACK6desuPrsbk6Yd3ky4UHAPXQFFC9w");
-
-const DISCRIMINATOR_SIZE: usize = 8;
+declare_id!("HQYNznB3XTqxzuEqqKMAD9XkYE5BGrnv8xmkoDNcqHYB");
 
 #[program]
 pub mod owner_check {
@@ -26,27 +24,10 @@ pub mod owner_check {
 
         let amount = ctx.accounts.token_account.amount;
 
-        let seeds = &[b"token".as_ref(), &[ctx.bumps.token_account]];
-        let signer = [&seeds[..]];
-
-        let cpi_ctx = CpiContext::new_with_signer(
-            ctx.accounts.token_program.to_account_info(),
-            token::Transfer {
-                from: ctx.accounts.token_account.to_account_info(),
-                authority: ctx.accounts.token_account.to_account_info(),
-                to: ctx.accounts.withdraw_destination.to_account_info(),
-            },
-            &signer,
-        );
-
-        token::transfer(cpi_ctx, amount)?;
-        Ok(())
-    }
-
-    pub fn secure_withdraw(ctx: Context<SecureWithdraw>) -> Result<()> {
-        let amount = ctx.accounts.token_account.amount;
-
-        let seeds = &[b"token".as_ref(), &[ctx.bumps.token_account]];
+        let seeds = &[
+            b"token".as_ref(),
+            &[*ctx.bumps.get("token_account").unwrap()],
+        ];
         let signer = [&seeds[..]];
 
         let cpi_ctx = CpiContext::new_with_signer(
@@ -69,7 +50,7 @@ pub struct InitializeVault<'info> {
     #[account(
         init,
         payer = authority,
-        space = DISCRIMINATOR_SIZE + Vault::INIT_SPACE,
+        space = 8 + 32 + 32,
     )]
     pub vault: Account<'info, Vault>,
     #[account(
@@ -105,24 +86,7 @@ pub struct InsecureWithdraw<'info> {
     pub authority: Signer<'info>,
 }
 
-#[derive(Accounts)]
-pub struct SecureWithdraw<'info> {
-    #[account(has_one = token_account,has_one = authority)]
-    pub vault: Account<'info, Vault>,
-    #[account(
-        mut,
-        seeds = [b"token"],
-        bump,
-    )]
-    pub token_account: Account<'info, TokenAccount>,
-    #[account(mut)]
-    pub withdraw_destination: Account<'info, TokenAccount>,
-    pub token_program: Program<'info, Token>,
-    pub authority: Signer<'info>,
-}
-
 #[account]
-#[derive(InitSpace)]
 pub struct Vault {
     token_account: Pubkey,
     authority: Pubkey,

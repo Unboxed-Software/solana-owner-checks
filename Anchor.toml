@@ -1,19 +1,16 @@
-[toolchain]
-
 [features]
-resolution = true
+seeds = false
 skip-lint = false
-
 [programs.localnet]
-clone = "7967qGRBusM49RUdBiFU8s9YY3fSwA9rxCSELXgk8Tk1"
-owner_check = "2JzQxdnKh6RXwACK6desuPrsbk6Yd3ky4UHAPXQFFC9w"
+owner_check = "HQYNznB3XTqxzuEqqKMAD9XkYE5BGrnv8xmkoDNcqHYB"
+clone = "DUN7nniuatsMC7ReCh5eJRQExnutppN1tAfjfXFmGDq3"
 
 [registry]
 url = "https://api.apr.dev"
 
 [provider]
-cluster = "Localnet"
-wallet = "~/.config/solana/id.json"
+cluster = "localnet"
+wallet = "/home/johnliu/.config/solana/id.json"
 
 [scripts]
 test = "yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/**/*.ts"
