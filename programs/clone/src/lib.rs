@@ -1,7 +1,9 @@
 use anchor_lang::prelude::*;
 use anchor_spl::token::TokenAccount;
 
-declare_id!("DJSGTQPYWj9kZqBrD993LJy2fM7R3zsxL8KrAtRMbUi5");
+declare_id!("2Gn5MFGMvRjd548z6vhreh84UiL7L5TFzV5kKGmk4Fga");
+
+const DISCRIMINATOR_SIZE: usize = 8;
 
 #[program]
 pub mod clone {
@@ -19,7 +21,7 @@ pub struct InitializeVault<'info> {
     #[account(
         init,
         payer = authority,
-        space = 8 + 32 + 32,
+        space = DISCRIMINATOR_SIZE + Vault::INIT_SPACE,
     )]
     pub vault: Account<'info, Vault>,
     pub token_account: Account<'info, TokenAccount>,
@@ -29,6 +31,7 @@ pub struct InitializeVault<'info> {
 }
 
 #[account]
+#[derive(Default, InitSpace)]
 pub struct Vault {
     token_account: Pubkey,
     authority: Pubkey,
