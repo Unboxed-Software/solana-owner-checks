@@ -116,7 +116,7 @@ pub struct SecureWithdraw<'info> {
 
 #[derive(Accounts)]
 pub struct InsecureWithdraw<'info> {
-    /// CHECK: This account is not being read or written in this instruction
+    /// CHECK: This account will not be checked by anchor
     pub vault: UncheckedAccount<'info>,
     #[account(
         mut,
