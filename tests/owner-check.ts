@@ -9,70 +9,70 @@ import {
   mintTo,
   getAccount,
 } from "@solana/spl-token";
-import {
-  Connection,
-  Keypair,
-  LAMPORTS_PER_SOL,
-  PublicKey,
-} from "@solana/web3.js";
+import { Keypair, LAMPORTS_PER_SOL, PublicKey } from "@solana/web3.js";
 import { airdropIfRequired } from "@solana-developers/helpers";
 
-// Set up Anchor
-anchor.AnchorProvider.env().opts.commitment = "confirmed";
-const provider = anchor.AnchorProvider.env();
-const connection = provider.connection;
-const wallet = provider.wallet as anchor.Wallet;
+describe("Owner Check", () => {
+  const provider = anchor.AnchorProvider.env();
+  anchor.setProvider(provider);
 
-const program = anchor.workspace.OwnerCheck as Program<OwnerCheck>;
+  const program = anchor.workspace.OwnerCheck as Program<OwnerCheck>;
+  const programClone = anchor.workspace.Clone as Program<Clone>;
 
-const programClone = anchor.workspace.Clone as Program<Clone>;
+  const connection = provider.connection;
+  const walletAuthority = provider.wallet as anchor.Wallet;
 
-const walletFake = Keypair.generate();
-const vault = Keypair.generate();
-const vaultClone = Keypair.generate();
+  const unauthorizedWallet = Keypair.generate();
+  const vaultAccount = Keypair.generate();
+  const vaultCloneAccount = Keypair.generate();
 
-const [tokenPDA] = PublicKey.findProgramAddressSync(
-  [Buffer.from("token")],
-  program.programId
-);
+  const TOKEN_SEED = "token";
+  const [tokenPDA] = PublicKey.findProgramAddressSync(
+    [Buffer.from(TOKEN_SEED)],
+    program.programId
+  );
 
-let mint: PublicKey;
-let withdrawDestination: PublicKey;
-let withdrawDestinationFake: PublicKey;
+  let tokenMint: PublicKey;
+  let authorizedWithdrawDestination: PublicKey;
+  let unauthorizedWithdrawDestination: PublicKey;
 
-describe("owner-check", () => {
+  const INITIAL_AIRDROP_AMOUNT = 1 * LAMPORTS_PER_SOL;
+  const MINIMUM_BALANCE_FOR_RENT_EXEMPTION = 1 * LAMPORTS_PER_SOL;
+  const INITIAL_TOKEN_AMOUNT = 100;
+
   before(async () => {
     try {
-      mint = await createMint(
+      tokenMint = await createMint(
         connection,
-        wallet.payer,
-        wallet.publicKey,
+        walletAuthority.payer,
+        walletAuthority.publicKey,
         null,
         0
       );
 
-      withdrawDestination = await createAccount(
+      authorizedWithdrawDestination = await createAccount(
         connection,
-        wallet.payer,
-        mint,
-        wallet.publicKey
+        walletAuthority.payer,
+        tokenMint,
+        walletAuthority.publicKey
       );
 
-      withdrawDestinationFake = await createAccount(
+      unauthorizedWithdrawDestination = await createAccount(
         connection,
-        wallet.payer,
-        mint,
-        walletFake.publicKey
+        walletAuthority.payer,
+        tokenMint,
+        unauthorizedWallet.publicKey
       );
 
       await airdropIfRequired(
         connection,
-        walletFake.publicKey,
-        1 * LAMPORTS_PER_SOL,
-        1 * LAMPORTS_PER_SOL
+        unauthorizedWallet.publicKey,
+        INITIAL_AIRDROP_AMOUNT,
+        MINIMUM_BALANCE_FOR_RENT_EXEMPTION
       );
     } catch (error) {
-      throw new Error(`Failed to set up test: ${error.message}`);
+      console.error("Test setup failed:", error);
+      throw error;
     }
   });
 
@@ -81,77 +81,91 @@ describe("owner-check", () => {
       await program.methods
         .initializeVault()
         .accounts({
-          vault: vault.publicKey,
+          vault: vaultAccount.publicKey,
           tokenAccount: tokenPDA,
-          mint: mint,
-          authority: provider.wallet.publicKey,
+          mint: tokenMint,
+          authority: walletAuthority.publicKey,
         })
-        .signers([vault])
+        .signers([vaultAccount])
         .rpc();
 
-      await mintTo(connection, wallet.payer, mint, tokenPDA, wallet.payer, 100);
+      await mintTo(
+        connection,
+        walletAuthority.payer,
+        tokenMint,
+        tokenPDA,
+        walletAuthority.payer,
+        INITIAL_TOKEN_AMOUNT
+      );
 
       const tokenAccountInfo = await getAccount(connection, tokenPDA);
-      expect(tokenAccountInfo.amount).to.equal(100n);
+      expect(Number(tokenAccountInfo.amount)).to.equal(INITIAL_TOKEN_AMOUNT);
     } catch (error) {
-      throw new Error(`Failed to initialize vault: ${error.message}`);
+      console.error("Vault initialization failed:", error);
+      throw error;
     }
   });
 
   it("initializes fake vault", async () => {
     try {
-      const tx = await programClone.methods
+      const transaction = await programClone.methods
         .initializeVault()
         .accounts({
-          vault: vaultClone.publicKey,
+          vault: vaultCloneAccount.publicKey,
           tokenAccount: tokenPDA,
-          authority: walletFake.publicKey,
+          authority: unauthorizedWallet.publicKey,
         })
         .transaction();
 
-      await anchor.web3.sendAndConfirmTransaction(connection, tx, [
-        walletFake,
-        vaultClone,
+      await anchor.web3.sendAndConfirmTransaction(connection, transaction, [
+        unauthorizedWallet,
+        vaultCloneAccount,
       ]);
     } catch (error) {
-      throw new Error(`Failed to initialize fake vault: ${error.message}`);
+      console.error("Fake vault initialization failed:", error);
+      throw error;
     }
   });
 
   it("performs insecure withdraw", async () => {
     try {
-      const tx = await program.methods
+      const transaction = await program.methods
         .insecureWithdraw()
         .accounts({
-          vault: vaultClone.publicKey,
+          vault: vaultCloneAccount.publicKey,
           tokenAccount: tokenPDA,
-          withdrawDestination: withdrawDestinationFake,
-          authority: walletFake.publicKey,
+          withdrawDestination: unauthorizedWithdrawDestination,
+          authority: unauthorizedWallet.publicKey,
         })
         .transaction();
 
-      await anchor.web3.sendAndConfirmTransaction(connection, tx, [walletFake]);
+      await anchor.web3.sendAndConfirmTransaction(connection, transaction, [
+        unauthorizedWallet,
+      ]);
 
       const tokenAccountInfo = await getAccount(connection, tokenPDA);
-      expect(tokenAccountInfo.amount).to.equal(0n);
+      expect(Number(tokenAccountInfo.amount)).to.equal(0);
     } catch (error) {
-      throw new Error(`Failed to perform insecure withdraw: ${error.message}`);
+      console.error("Insecure withdraw failed:", error);
+      throw error;
     }
   });
 
   it("fails secure withdraw with incorrect authority", async () => {
     try {
-      const tx = await program.methods
+      const transaction = await program.methods
         .secureWithdraw()
         .accounts({
-          vault: vaultClone.publicKey,
+          vault: vaultCloneAccount.publicKey,
           tokenAccount: tokenPDA,
-          withdrawDestination: withdrawDestinationFake,
-          authority: walletFake.publicKey,
+          withdrawDestination: unauthorizedWithdrawDestination,
+          authority: unauthorizedWallet.publicKey,
         })
         .transaction();
 
-      await anchor.web3.sendAndConfirmTransaction(connection, tx, [walletFake]);
+      await anchor.web3.sendAndConfirmTransaction(connection, transaction, [
+        unauthorizedWallet,
+      ]);
       throw new Error("Expected transaction to fail, but it succeeded");
     } catch (error) {
       expect(error).to.be.an("error");
@@ -161,22 +175,30 @@ describe("owner-check", () => {
 
   it("performs secure withdraw successfully", async () => {
     try {
-      await mintTo(connection, wallet.payer, mint, tokenPDA, wallet.payer, 100);
+      await mintTo(
+        connection,
+        walletAuthority.payer,
+        tokenMint,
+        tokenPDA,
+        walletAuthority.payer,
+        INITIAL_TOKEN_AMOUNT
+      );
 
       await program.methods
         .secureWithdraw()
         .accounts({
-          vault: vault.publicKey,
+          vault: vaultAccount.publicKey,
           tokenAccount: tokenPDA,
-          withdrawDestination: withdrawDestination,
-          authority: wallet.publicKey,
+          withdrawDestination: authorizedWithdrawDestination,
+          authority: walletAuthority.publicKey,
         })
         .rpc();
 
       const tokenAccountInfo = await getAccount(connection, tokenPDA);
-      expect(tokenAccountInfo.amount).to.equal(0n);
+      expect(Number(tokenAccountInfo.amount)).to.equal(0);
     } catch (error) {
-      throw new Error(`Failed to perform secure withdraw: ${error.message}`);
+      console.error("Secure withdraw failed:", error);
+      throw error;
     }
   });
 });
