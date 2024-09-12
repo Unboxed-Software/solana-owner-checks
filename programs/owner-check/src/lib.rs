@@ -1,7 +1,9 @@
 use anchor_lang::prelude::*;
 use anchor_spl::token::{self, Mint, Token, TokenAccount};
 
-declare_id!("9o4A8QckkUyxgTxsCRxHxji7FqBSuWHRtQcaXRZGrZp9");
+declare_id!("3uF3yaymq1YBmDDHpRPwifiaBf4eK8M2jLgaMcCTg9n9");
+
+pub const DISCRIMINATOR_SIZE: usize = 8;
 
 #[program]
 pub mod owner_check {
@@ -26,7 +28,7 @@ pub mod owner_check {
 
         let seeds = &[
             b"token".as_ref(),
-            &[*ctx.bumps.get("token_account").unwrap()],
+            &[ctx.bumps.token_account],
         ];
         let signer = [&seeds[..]];
 
@@ -50,7 +52,7 @@ pub struct InitializeVault<'info> {
     #[account(
         init,
         payer = authority,
-        space = 8 + 32 + 32,
+        space = DISCRIMINATOR_SIZE + Vault::INIT_SPACE,
     )]
     pub vault: Account<'info, Vault>,
     #[account(
@@ -72,7 +74,7 @@ pub struct InitializeVault<'info> {
 
 #[derive(Accounts)]
 pub struct InsecureWithdraw<'info> {
-    /// CHECK:
+    /// CHECK: This account will not be checked by anchor
     pub vault: UncheckedAccount<'info>,
     #[account(
         mut,
@@ -87,6 +89,7 @@ pub struct InsecureWithdraw<'info> {
 }
 
 #[account]
+#[derive(Default, InitSpace)]
 pub struct Vault {
     token_account: Pubkey,
     authority: Pubkey,

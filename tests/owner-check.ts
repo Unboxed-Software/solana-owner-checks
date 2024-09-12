@@ -1,104 +1,129 @@
-import * as anchor from "@project-serum/anchor"
-import * as spl from "@solana/spl-token"
-import { Program } from "@project-serum/anchor"
-import { OwnerCheck } from "../target/types/owner_check"
-import { Clone } from "../target/types/clone"
-import { findProgramAddressSync } from "@project-serum/anchor/dist/cjs/utils/pubkey"
-import { expect } from "chai"
+import * as anchor from "@coral-xyz/anchor";
+import { Program } from "@coral-xyz/anchor";
+import { OwnerCheck } from "../target/types/owner_check";
+import { Clone } from "../target/types/clone";
+import { expect } from "chai";
+import {
+  createMint,
+  createAccount,
+  mintTo,
+  getAccount,
+} from "@solana/spl-token";
+import { Keypair, LAMPORTS_PER_SOL, PublicKey } from "@solana/web3.js";
+import { airdropIfRequired } from "@solana-developers/helpers";
 
-describe("owner-check", () => {
-  const provider = anchor.AnchorProvider.env()
-  anchor.setProvider(provider)
+describe("Owner Check", () => {
+  const provider = anchor.AnchorProvider.env();
+  anchor.setProvider(provider);
 
-  const connection = anchor.getProvider().connection
-  const wallet = anchor.workspace.OwnerCheck.provider.wallet
-  const walletFake = anchor.web3.Keypair.generate()
+  const program = anchor.workspace.OwnerCheck as Program<OwnerCheck>;
+  const programClone = anchor.workspace.Clone as Program<Clone>;
 
-  const program = anchor.workspace.OwnerCheck as Program<OwnerCheck>
-  const programClone = anchor.workspace.Clone as Program<Clone>
+  const connection = provider.connection;
+  const walletAuthority = provider.wallet as anchor.Wallet;
 
-  const vault = anchor.web3.Keypair.generate()
-  const vaultClone = anchor.web3.Keypair.generate()
+  const unauthorizedWallet = Keypair.generate();
+  const vaultAccount = Keypair.generate();
+  const vaultCloneAccount = Keypair.generate();
 
-  const [tokenPDA] = findProgramAddressSync(
-    [Buffer.from("token")],
+  const TOKEN_SEED = "token";
+  const [tokenPDA] = PublicKey.findProgramAddressSync(
+    [Buffer.from(TOKEN_SEED)],
     program.programId
-  )
+  );
 
-  let mint: anchor.web3.PublicKey
-  let withdrawDestination: anchor.web3.PublicKey
-  let withdrawDestinationFake: anchor.web3.PublicKey
+  let tokenMint: PublicKey;
+  let authorizedWithdrawDestination: PublicKey;
+  let unauthorizedWithdrawDestination: PublicKey;
+
+  const INITIAL_AIRDROP_AMOUNT = 1 * LAMPORTS_PER_SOL;
+  const MINIMUM_BALANCE_FOR_RENT_EXEMPTION = 1 * LAMPORTS_PER_SOL;
+  const INITIAL_TOKEN_AMOUNT = 100;
 
   before(async () => {
-    mint = await spl.createMint(
-      connection,
-      wallet.payer,
-      wallet.publicKey,
-      null,
-      0
-    )
+    try {
+      tokenMint = await createMint(
+        connection,
+        walletAuthority.payer,
+        walletAuthority.publicKey,
+        null,
+        0
+      );
 
-    withdrawDestination = await spl.createAccount(
-      connection,
-      wallet.payer,
-      mint,
-      wallet.publicKey
-    )
+      authorizedWithdrawDestination = await createAccount(
+        connection,
+        walletAuthority.payer,
+        tokenMint,
+        walletAuthority.publicKey
+      );
 
-    withdrawDestinationFake = await spl.createAccount(
-      connection,
-      wallet.payer,
-      mint,
-      walletFake.publicKey
-    )
+      unauthorizedWithdrawDestination = await createAccount(
+        connection,
+        walletAuthority.payer,
+        tokenMint,
+        unauthorizedWallet.publicKey
+      );
 
-    await connection.confirmTransaction(
-      await connection.requestAirdrop(
-        walletFake.publicKey,
-        1 * anchor.web3.LAMPORTS_PER_SOL
-      ),
-      "confirmed"
-    )
-  })
+      await airdropIfRequired(
+        connection,
+        unauthorizedWallet.publicKey,
+        INITIAL_AIRDROP_AMOUNT,
+        MINIMUM_BALANCE_FOR_RENT_EXEMPTION
+      );
+    } catch (error) {
+      console.error("Test setup failed:", error);
+      throw error;
+    }
+  });
 
-  it("Initialize Vault", async () => {
-    await program.methods
-      .initializeVault()
-      .accounts({
-        vault: vault.publicKey,
-        tokenAccount: tokenPDA,
-        mint: mint,
-        authority: provider.wallet.publicKey,
-      })
-      .signers([vault])
-      .rpc()
+  it("initializes vault", async () => {
+    try {
+      await program.methods
+        .initializeVault()
+        .accounts({
+          vault: vaultAccount.publicKey,
+          tokenAccount: tokenPDA,
+          mint: tokenMint,
+          authority: walletAuthority.publicKey,
+        })
+        .signers([vaultAccount])
+        .rpc();
 
-    await spl.mintTo(
-      connection,
-      wallet.payer,
-      mint,
-      tokenPDA,
-      wallet.payer,
-      100
-    )
+      await mintTo(
+        connection,
+        walletAuthority.payer,
+        tokenMint,
+        tokenPDA,
+        walletAuthority.payer,
+        INITIAL_TOKEN_AMOUNT
+      );
 
-    const balance = await connection.getTokenAccountBalance(tokenPDA)
-    expect(balance.value.uiAmount).to.eq(100)
-  })
+      const tokenAccountInfo = await getAccount(connection, tokenPDA);
+      expect(Number(tokenAccountInfo.amount)).to.equal(INITIAL_TOKEN_AMOUNT);
+    } catch (error) {
+      console.error("Vault initialization failed:", error);
+      throw error;
+    }
+  });
 
-  it("Initialize Fake Vault", async () => {
-    const tx = await programClone.methods
-      .initializeVault()
-      .accounts({
-        vault: vaultClone.publicKey,
-        tokenAccount: tokenPDA,
-        authority: walletFake.publicKey,
-      })
-      .transaction()
+  it("initializes fake vault", async () => {
+    try {
+      const transaction = await programClone.methods
+        .initializeVault()
+        .accounts({
+          vault: vaultCloneAccount.publicKey,
+          tokenAccount: tokenPDA,
+          authority: unauthorizedWallet.publicKey,
+        })
+        .transaction();
 
-    await anchor.web3.sendAndConfirmTransaction(connection, tx, [
-      walletFake,
-      vaultClone,
-    ])
-  })
-})
+      await anchor.web3.sendAndConfirmTransaction(connection, transaction, [
+        unauthorizedWallet,
+        vaultCloneAccount,
+      ]);
+    } catch (error) {
+      console.error("Fake vault initialization failed:", error);
+      throw error;
+    }
+  });
+});
